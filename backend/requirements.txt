@@ -1,3 +1,4 @@
 yfinance
 SQLAlchemy
 Flask
+Flask-Cors

@@ -1,5 +1,5 @@
 from .price_service import get_current_price
-from ..tax_logic import calculate_federal_tax, calculate_state_tax
+from .tax_logic import calculate_federal_tax, calculate_state_tax
 from .models import User, Income, Asset
 
 def calculate_net_worth(user: User, incomes: list[Income], assets: list[Asset]):

@@ -25,8 +25,31 @@ The frontend is a React application that provides the user interface for the Net
 
 ## Project Roadmap
 
-1.  ** fleshing out the database models.**
-2.  ** adding more filing statuses and states to the tax logic.**
-3.  ** building out the frontend to interact with the backend.**
-4.  **Implementing user authentication and data persistence.**
-5.  **Adding features for tracking expenses, net worth, and other financial metrics.**
+### Short-Term Goals (Soon)
+
+- **Future Net Worth Prediction:** Implement a model to predict the user's future net worth based on their current financial situation.
+- **Tax Payment Tracking:**
+    - Display the amount of taxes the user has already paid.
+    - Show an estimate of how much the user still needs to save for taxes.
+- **Real Post-Tax Income:** Calculate and display the user's real post-tax income to provide a clearer picture of their actual take-home pay compared to their gross salary.
+- **Enhanced Tax Calculation System:**
+    - Improve the robustness of the tax calculation system.
+    - Allow users to select their state for accurate state tax calculations.
+- **Manual Investment Tracking:**
+    - Allow users to manually enter their investment shares and cost basis.
+    - Potentially add a feature to track the purchase date for historical performance tracking.
+
+### Long-Term Goals
+
+- **Cross-Platform Availability:**
+    - Develop downloadable mobile applications for iPhone and Android devices.
+    - Maintain and enhance the web-based application.
+- **Personalized Financial Guidance:**
+    - The overall goal is to help people improve their personal finance habits.
+    - Provide personalized strategies based on the user's net worth, goals, age, income, and spending habits.
+    - Identify unnecessary expenditures and impulse buys.
+    - Offer aggressive strategies for users who are behind on their financial goals and provide encouragement for those who are on track.
+- **Brokerage and Bank Integration:**
+    - **Brokerage Sync:** Sync with brokerage accounts (e.g., Vanguard, E-Trade, Fidelity) to automatically track investments.
+    - **Bank Sync:** Sync with bank accounts to automatically track income and expenses.
+    - **Payroll Sync:** Sync with payroll services (e.g., ADP) to get accurate data on taxes paid.

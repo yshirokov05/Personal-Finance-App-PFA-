@@ -1,56 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import AssetTable from './AssetTable';
-import axios from 'axios';
-import { PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import Card from './Card';
+import { DollarSign, Briefcase, PieChart as PieChartIcon } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
-const Dashboard = () => {
-    const [netWorth, setNetWorth] = useState(0);
-    const [assets, setAssets] = useState([]);
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        axios.get('/api/net_worth')
-            .then(response => {
-                const fetchedAssets = response.data.assets.map(asset => ({
-                    ...asset,
-                    name: asset.ticker,
-                    value: asset.shares * (asset.current_price || 0) // we need current price here
-                }));
-                setAssets(fetchedAssets);
-                setNetWorth(response.data.real_time_net_worth);
-                setLoading(false);
-            })
-            .catch(error => {
-                setError(error.message);
-                setLoading(false);
-            });
-    }, []);
-
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
-    
-    // The API does not return the current price, so we need to calculate it. For now, let's use cost basis
-    const chartData = assets.map(asset => ({ name: asset.ticker, value: asset.cost_basis }));
+const Dashboard = ({ netWorth, assets }) => {
+    const chartData = assets.map(asset => ({ name: asset.ticker, value: asset.shares * (asset.current_price || asset.cost_basis) }));
 
     return (
-        <div>
-            <h1>Net Worth Command Center</h1>
-            <h2>Real-Time Net Worth: ${netWorth.toLocaleString()}</h2>
-            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <Card title="Net Worth" icon={<DollarSign className="text-green-500" />}>
+                <p className="text-3xl font-bold">${netWorth.toLocaleString()}</p>
+            </Card>
+
+            <Card title="Assets" icon={<Briefcase className="text-blue-500" />}>
                 <AssetTable assets={assets} />
-                <PieChart width={400} height={400}>
+            </Card>
+
+            <Card title="Asset Allocation" icon={<PieChartIcon className="text-yellow-500" />}>
+                <RechartsPieChart width={300} height={300}>
                     <Pie
                         data={chartData}
-                        cx={200}
-                        cy={200}
+                        cx="50%"
+                        cy="50%"
                         labelLine={false}
                         outerRadius={80}
                         fill="#8884d8"
@@ -62,8 +36,8 @@ const Dashboard = () => {
                     </Pie>
                     <Tooltip />
                     <Legend />
-                </PieChart>
-            </div>
+                </RechartsPieChart>
+            </Card>
         </div>
     );
 };

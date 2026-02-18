@@ -4,6 +4,22 @@
   A web-based personal finance application designed for tracking variable income and manual asset    
   growth.
 
+  ## 🎯 Project Goals
+
+Our vision is to build a comprehensive personal finance tool that empowers users to take control of their financial lives.
+
+**Short-term goals include:**
+- Predicting future net worth.
+- Tracking tax payments and savings.
+- Calculating real post-tax income.
+
+**Long-term goals include:**
+- Cross-platform availability (iOS, Android, Web).
+- Personalized financial guidance and strategies.
+- Seamless integration with brokerages, banks, and payroll services.
+
+For a detailed breakdown of our project roadmap, please see [PROJECT_GOALS.md](PROJECT_GOALS.md).
+
   ## 👤 Solo Project
   This is a solo development project focused on building a practical financial management tool.      
 
