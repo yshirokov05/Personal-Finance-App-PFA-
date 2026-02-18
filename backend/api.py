@@ -1,92 +1,151 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from .price_service import get_current_price
 from .calculations import calculate_net_worth
-from .models import User, Income, Asset, FilingStatus, USState, IncomeType
+from .models import User, Income, Asset, FilingStatus, USState, IncomeType, Debt, AssetType
 
 app = Flask(__name__)
 CORS(app)
 
 # In-memory data store
 user = User(filing_status=FilingStatus.SINGLE, state=USState.CA)
-incomes = [Income(income_type=IncomeType.SALARY, amount=120000)]
+incomes = [Income(income_type=IncomeType.SALARY, amount=120000, monthly_income=10000)]
 assets = [
-    Asset(ticker='QQQ', shares=100, cost_basis=30000),
-    Asset(ticker='NVDA', shares=50, cost_basis=10000),
-    Asset(ticker='CASH', shares=25000, cost_basis=1) # Representing cash as an asset
+    Asset(ticker='QQQ', shares=100, cost_basis=30000, asset_type=AssetType.STOCK),
+    Asset(ticker='NVDA', shares=50, cost_basis=10000, asset_type=AssetType.STOCK),
+    Asset(ticker='CASH', shares=25000, cost_basis=1, asset_type=AssetType.CASH)
+]
+debts = [
+    Debt(name='Student Loan', initial_amount=30000, amount_paid=10000, monthly_payment=500, interest_rate=0.05)
 ]
 
 def asset_to_dict(asset):
+    current_price = get_current_price(asset.ticker) if asset.asset_type not in [AssetType.CASH, AssetType.HOUSING] else 1.0
     return {
         'ticker': asset.ticker,
         'shares': asset.shares,
-        'cost_basis': asset.cost_basis
+        'cost_basis': asset.cost_basis,
+        'asset_type': asset.asset_type.name,
+        'current_price': current_price
     }
 
 def income_to_dict(income):
-    # This needs to be improved to return all relevant fields
-    # for now, just return what is needed for net_worth calculation
     return {
         'income_type': income.income_type.name,
         'amount': income.amount,
-        # Add other fields here as needed by the frontend
-        'monthly_income': income.monthly_income if hasattr(income, 'monthly_income') else None,
-        'hourly_wage': income.hourly_wage if hasattr(income, 'hourly_wage') else None,
-        'hours_worked': income.hours_worked if hasattr(income, 'hours_worked') else None,
+        'monthly_income': income.monthly_income,
+        'hourly_wage': income.hourly_wage,
+        'hours_worked': income.hours_worked,
+    }
+
+def debt_to_dict(debt):
+    return {
+        'name': debt.name,
+        'initial_amount': debt.initial_amount,
+        'amount_paid': debt.amount_paid,
+        'remaining_balance': debt.remaining_balance,
+        'monthly_payment': debt.monthly_payment,
+        'interest_rate': debt.interest_rate
     }
 
 @app.route('/api/net_worth', methods=['GET'])
 def get_net_worth():
     """Calculates and returns the current net worth."""
-    net_worth_data = calculate_net_worth(user, incomes, assets)
+    net_worth_data = calculate_net_worth(user, incomes, assets, debts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
+    net_worth_data['debts'] = [debt_to_dict(d) for d in debts]
     return jsonify(net_worth_data)
+
+from .price_service import get_current_price, validate_ticker
 
 @app.route('/api/portfolio', methods=['PUT'])
 def update_portfolio():
-    """Updates the portfolio based on new share and income data."""
+    """Updates the portfolio with validation for tickers and numbers."""
     data = request.get_json()
 
     # Update assets
     new_assets_data = data.get('assets', [])
-    assets.clear()
+    temp_assets = []
     for asset_data in new_assets_data:
-        cost_basis = asset_data.get('cost_basis') if asset_data.get('ticker') != 'CASH' else 1.0
-        assets.append(
+        ticker = asset_data.get('ticker', '').upper()
+        asset_type_str = asset_data.get('asset_type', 'STOCK')
+        asset_type = AssetType[asset_type_str]
+        shares = float(asset_data.get('shares', 0))
+        cost_basis = float(asset_data.get('cost_basis', 0))
+
+        if shares < 0 or cost_basis < 0:
+             return jsonify({'error': f"Values for {ticker or asset_type_str} must be positive."}), 400
+
+        if asset_type in [AssetType.STOCK, AssetType.BOND]:
+            if not ticker:
+                 return jsonify({'error': "Ticker is required for stocks and bonds."}), 400
+            if not validate_ticker(ticker):
+                 return jsonify({'error': f"Invalid ticker: {ticker}. Please enter a real market symbol."}), 400
+        elif asset_type == AssetType.CASH:
+            ticker = 'CASH'
+            cost_basis = 1.0
+        elif asset_type == AssetType.HOUSING:
+            if not ticker:
+                ticker = 'PRIMARY RESIDENCE'
+            cost_basis = shares # For housing, we treat initial value as cost basis
+
+        temp_assets.append(
             Asset(
-                ticker=asset_data['ticker'],
-                shares=asset_data['shares'],
-                cost_basis=cost_basis
+                ticker=ticker,
+                shares=shares,
+                cost_basis=cost_basis,
+                asset_type=asset_type
             )
         )
+    
+    # If all valid, update the real store
+    assets.clear()
+    assets.extend(temp_assets)
 
-    # Update incomes
+    # Update incomes (basic validation)
     new_incomes_data = data.get('incomes', [])
     incomes.clear()
     for income_data in new_incomes_data:
         income_type = IncomeType[income_data['income_type']]
         amount = 0
-        
         income = Income(income_type=income_type)
-
         if income_type == IncomeType.SALARY:
-            monthly_income = income_data.get('monthly_income', 0)
+            monthly_income = float(income_data.get('monthly_income', 0))
             amount = monthly_income * 12
             income.monthly_income = monthly_income
         elif income_type == IncomeType.HOURLY:
-            hourly_wage = income_data.get('hourly_wage', 0)
-            hours_worked = income_data.get('hours_worked', 0)
+            hourly_wage = float(income_data.get('hourly_wage', 0))
+            hours_worked = float(income_data.get('hours_worked', 0))
             amount = hourly_wage * hours_worked * 52
             income.hourly_wage = hourly_wage
             income.hours_worked = hours_worked
-
-        income.amount = amount
+        income.amount = max(0, amount)
         incomes.append(income)
 
-    # Recalculate net worth with updated data
-    net_worth_data = calculate_net_worth(user, incomes, assets)
+    # Update debts
+    new_debts_data = data.get('debts', [])
+    debts.clear()
+    for debt_data in new_debts_data:
+        initial = float(debt_data.get('initial_amount', 0))
+        paid = float(debt_data.get('amount_paid', 0))
+        if initial < 0 or paid < 0:
+             return jsonify({'error': "Debt amounts must be positive."}), 400
+        
+        debts.append(
+            Debt(
+                name=debt_data['name'] or 'Unnamed Debt',
+                initial_amount=initial,
+                amount_paid=paid,
+                monthly_payment=float(debt_data.get('monthly_payment', 0)),
+                interest_rate=float(debt_data.get('interest_rate', 0))
+            )
+        )
+
+    net_worth_data = calculate_net_worth(user, incomes, assets, debts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
+    net_worth_data['debts'] = [debt_to_dict(d) for d in debts]
     return jsonify(net_worth_data)
 
 if __name__ == '__main__':

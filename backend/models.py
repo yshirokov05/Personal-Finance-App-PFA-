@@ -30,20 +30,44 @@ class IncomeType(enum.Enum):
     HOURLY = "hourly"
     SALARY = "salary"
 
+class AssetType(enum.Enum):
+    STOCK = "stock"
+    BOND = "bond"
+    CASH = "cash"
+    HOUSING = "housing"
+
 class Income(Base):
     __tablename__ = 'incomes'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, nullable=True)
     income_type = Column(Enum(IncomeType), nullable=False)
     amount = Column(Float, nullable=False)
+    monthly_income = Column(Float, nullable=True)
+    hourly_wage = Column(Float, nullable=True)
+    hours_worked = Column(Float, nullable=True)
 
 class Asset(Base):
     __tablename__ = 'assets'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, nullable=True)
     ticker = Column(String, nullable=False)
     shares = Column(Float, nullable=False)
     cost_basis = Column(Float, nullable=False)
+    asset_type = Column(Enum(AssetType), nullable=False, default=AssetType.STOCK)
+
+class Debt(Base):
+    __tablename__ = 'debts'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=True)
+    name = Column(String, nullable=False)
+    initial_amount = Column(Float, nullable=False)
+    amount_paid = Column(Float, nullable=False, default=0.0)
+    monthly_payment = Column(Float, nullable=True)
+    interest_rate = Column(Float, nullable=True)
+
+    @property
+    def remaining_balance(self):
+        return max(0, self.initial_amount - self.amount_paid)
 
 # Example of how to set up the database engine
 # engine = create_engine('sqlite:///finance.db')
