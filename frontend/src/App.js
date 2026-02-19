@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component {
   }
 }
 
-function MainContent() {
+function MainContent({ isGuest }) {
   const { currentUser, logout } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
   const [netWorth, setNetWorth] = useState(0);
@@ -62,16 +62,18 @@ function MainContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState('income');
 
-  const getHeaders = async () => {
-    const token = await currentUser.getIdToken();
-    return {
-      headers: { Authorization: `Bearer ${token}` }
-    };
-  };
-
   const fetchData = async () => {
+    if (isGuest) {
+        setLoading(false);
+        return;
+    }
+    if (!currentUser) return;
     try {
-        const headers = await getHeaders();
+        const token = await currentUser.getIdToken(true); // Force refresh token
+        const headers = {
+          headers: { Authorization: `Bearer ${token}` }
+        };
+        console.log("Fetching data with token...");
         const response = await axios.get('/api/net_worth', headers);
         setAssets(response.data.assets);
         setIncomes(response.data.incomes);
@@ -99,9 +101,13 @@ function MainContent() {
   }, [currentUser]);
 
   const handleSave = async (portfolioData) => {
+    if (!currentUser) return;
     setLoading(true);
     try {
-        const headers = await getHeaders();
+        const token = await currentUser.getIdToken(true);
+        const headers = {
+          headers: { Authorization: `Bearer ${token}` }
+        };
         const response = await axios.put('/api/portfolio', portfolioData, headers);
         setAssets(response.data.assets);
         setIncomes(response.data.incomes);
@@ -129,9 +135,13 @@ function MainContent() {
   };
 
   const handleSaveTaxInfo = async (taxData) => {
+    if (!currentUser) return;
     setLoading(true);
     try {
-        const headers = await getHeaders();
+        const token = await currentUser.getIdToken(true);
+        const headers = {
+          headers: { Authorization: `Bearer ${token}` }
+        };
         const response = await axios.put('/api/user_tax_info', taxData, headers);
         setNetWorth(response.data.real_time_net_worth);
         setTaxLiability({
@@ -253,10 +263,17 @@ function MainContent() {
 
 function App() {
     const { currentUser } = useAuth();
+    const [isGuest, setIsGuest] = useState(false);
+
+    useEffect(() => {
+        const handleGuest = () => setIsGuest(true);
+        window.addEventListener('continue-as-guest', handleGuest);
+        return () => window.removeEventListener('continue-as-guest', handleGuest);
+    }, []);
 
     return (
         <ErrorBoundary>
-            {currentUser ? <MainContent /> : <Login />}
+            {(currentUser || isGuest) ? <MainContent isGuest={isGuest} /> : <Login />}
         </ErrorBoundary>
     );
 }

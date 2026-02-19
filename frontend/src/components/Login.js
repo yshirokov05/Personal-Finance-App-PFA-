@@ -72,12 +72,28 @@ const Login = () => {
                         </button>
                     </div>
                 </form>
-                <div className="text-center">
+                <div className="text-center space-y-4">
                     <button 
                         onClick={() => setIsSignup(!isSignup)} 
-                        className="text-blue-600 hover:text-blue-500 font-medium"
+                        className="block w-full text-blue-600 hover:text-blue-500 font-medium"
                     >
                         {isSignup ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+                    </button>
+                    
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-white text-gray-500">Or</span>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={() => window.dispatchEvent(new CustomEvent('continue-as-guest'))}
+                        className="block w-full text-gray-600 hover:text-gray-900 font-medium border border-gray-300 py-2 rounded-md hover:bg-gray-50"
+                    >
+                        Continue as Guest
                     </button>
                 </div>
             </div>

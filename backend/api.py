@@ -7,7 +7,11 @@ from firestore_db import get_user_data, save_user_data
 from auth import token_required
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True, resources={r"/api/*": {
+    "origins": "*", 
+    "allow_headers": ["Authorization", "Content-Type"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}})
 
 def asset_to_dict(asset):
     current_price = get_current_price(asset.ticker) if asset.asset_type not in [AssetType.CASH, AssetType.HOUSING, AssetType.SAVINGS, AssetType.CHECKING, AssetType.HIGH_YIELD_SAVINGS] else 1.0
@@ -42,7 +46,15 @@ def debt_to_dict(debt):
 @token_required
 def get_net_worth():
     """Calculates and returns the current net worth."""
-    user, incomes, assets, debts = get_user_data(user_id=request.uid)
+    if request.uid == "guest":
+        # Return empty/zero data for guests
+        user = User(filing_status=FilingStatus.SINGLE, state=USState.CA)
+        incomes = []
+        assets = []
+        debts = []
+    else:
+        user, incomes, assets, debts = get_user_data(user_id=request.uid)
+    
     net_worth_data = calculate_net_worth(user, incomes, assets, debts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
@@ -56,7 +68,13 @@ def get_net_worth():
 def update_portfolio():
     """Updates the portfolio with validation for tickers and numbers."""
     data = request.get_json()
-    user, incomes, assets, debts = get_user_data(user_id=request.uid)
+    if request.uid == "guest":
+        user = User(filing_status=FilingStatus.SINGLE, state=USState.CA)
+        incomes = []
+        assets = []
+        debts = []
+    else:
+        user, incomes, assets, debts = get_user_data(user_id=request.uid)
 
     # Update assets
     new_assets_data = data.get('assets', [])
@@ -134,8 +152,9 @@ def update_portfolio():
             )
         )
 
-    # Save to Firestore
-    save_user_data(user, incomes, assets, debts, user_id=request.uid)
+    # Save to Firestore only for registered users
+    if request.uid != "guest":
+        save_user_data(user, incomes, assets, debts, user_id=request.uid)
 
     net_worth_data = calculate_net_worth(user, incomes, assets, debts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
@@ -147,7 +166,13 @@ def update_portfolio():
 @token_required
 def update_user_tax_info():
     data = request.get_json()
-    user, incomes, assets, debts = get_user_data(user_id=request.uid)
+    if request.uid == "guest":
+        user = User(filing_status=FilingStatus.SINGLE, state=USState.CA)
+        incomes = []
+        assets = []
+        debts = []
+    else:
+        user, incomes, assets, debts = get_user_data(user_id=request.uid)
     
     new_filing_status_str = data.get('filing_status')
     new_state_str = data.get('state')
@@ -164,8 +189,9 @@ def update_user_tax_info():
         except KeyError:
             return jsonify({'error': f"Invalid state: {new_state_str}"}), 400
     
-    # Save to Firestore
-    save_user_data(user, incomes, assets, debts, user_id=request.uid)
+    # Save to Firestore only for registered users
+    if request.uid != "guest":
+        save_user_data(user, incomes, assets, debts, user_id=request.uid)
 
     net_worth_data = calculate_net_worth(user, incomes, assets, debts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
