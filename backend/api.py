@@ -2,9 +2,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from price_service import get_current_price, validate_ticker
 from calculations import calculate_net_worth
-from models import User, Income, Asset, FilingStatus, USState, IncomeType, Debt, AssetType
+from models import User, Income, Asset, FilingStatus, USState, IncomeType, Debt, AssetType, RetirementAccount, AccountType
 from firestore_db import get_user_data, save_user_data, get_db
 from auth import token_required
+import uuid
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True, resources={r"/api/*": {
@@ -20,7 +21,8 @@ def asset_to_dict(asset):
         'shares': asset.shares,
         'cost_basis': asset.cost_basis,
         'asset_type': asset.asset_type.name,
-        'current_price': current_price
+        'current_price': current_price,
+        'retirement_account_id': getattr(asset, 'retirement_account_id', None)
     }
 
 def income_to_dict(income):
@@ -28,8 +30,10 @@ def income_to_dict(income):
         'income_type': income.income_type.name,
         'amount': income.amount,
         'monthly_income': income.monthly_income,
+        'yearly_income': income.amount if income.income_type == IncomeType.SALARY else None,
         'hourly_wage': income.hourly_wage,
         'hours_worked': income.hours_worked,
+        'year': getattr(income, 'year', 2026)
     }
 
 def debt_to_dict(debt):
@@ -42,19 +46,29 @@ def debt_to_dict(debt):
         'interest_rate': debt.interest_rate
     }
 
+def retirement_account_to_dict(ra):
+    return {
+        'id': ra.id,
+        'name': ra.name,
+        'account_type': ra.account_type.name,
+        'contributions_2025': ra.contributions_2025,
+        'contributions_2026': ra.contributions_2026
+    }
+
 @app.route('/api/net_worth', methods=['GET'])
 @token_required
 def get_net_worth():
     """Calculates and returns the current net worth."""
     if request.uid == "guest":
-        user, incomes, assets, debts = get_user_data(user_id="demo_user")
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id="demo_user")
     else:
-        user, incomes, assets, debts = get_user_data(user_id=request.uid)
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id=request.uid)
     
-    net_worth_data = calculate_net_worth(user, incomes, assets, debts)
+    net_worth_data = calculate_net_worth(user, incomes, assets, debts, retirement_accounts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
     net_worth_data['debts'] = [debt_to_dict(d) for d in debts]
+    net_worth_data['retirement_accounts'] = [retirement_account_to_dict(ra) for ra in retirement_accounts]
     net_worth_data['filing_status'] = user.filing_status.name
     net_worth_data['state'] = user.state.name
     return jsonify(net_worth_data)
@@ -65,9 +79,25 @@ def update_portfolio():
     """Updates the portfolio with validation for tickers and numbers."""
     data = request.get_json()
     if request.uid == "guest":
-        user, incomes, assets, debts = get_user_data(user_id="demo_user")
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id="demo_user")
     else:
-        user, incomes, assets, debts = get_user_data(user_id=request.uid)
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id=request.uid)
+
+    # Update retirement accounts
+    new_retirement_data = data.get('retirement_accounts', [])
+    retirement_accounts = []
+    for ra_data in new_retirement_data:
+        ra_id = ra_data.get('id')
+        if not ra_id:
+            ra_id = str(uuid.uuid4())
+            
+        retirement_accounts.append(RetirementAccount(
+            id=ra_id,
+            name=ra_data['name'],
+            account_type=AccountType[ra_data['account_type']],
+            contributions_2025=float(ra_data.get('contributions_2025', 0)),
+            contributions_2026=float(ra_data.get('contributions_2026', 0))
+        ))
 
     # Update assets
     new_assets_data = data.get('assets', [])
@@ -95,14 +125,15 @@ def update_portfolio():
                 ticker = 'PRIMARY RESIDENCE'
             cost_basis = shares 
 
-        temp_assets.append(
-            Asset(
-                ticker=ticker,
-                shares=shares,
-                cost_basis=cost_basis,
-                asset_type=asset_type
-            )
+        asset = Asset(
+            ticker=ticker,
+            shares=shares,
+            cost_basis=cost_basis,
+            asset_type=asset_type
         )
+        if 'retirement_account_id' in asset_data:
+            asset.retirement_account_id = asset_data['retirement_account_id']
+        temp_assets.append(asset)
     
     assets = temp_assets
 
@@ -113,10 +144,16 @@ def update_portfolio():
         income_type = IncomeType[income_data['income_type']]
         amount = 0
         income = Income(income_type=income_type)
+        income.year = int(income_data.get('year', 2026))
+
         if income_type == IncomeType.SALARY:
-            monthly_income = float(income_data.get('monthly_income', 0))
-            amount = monthly_income * 12
-            income.monthly_income = monthly_income
+            if 'yearly_income' in income_data and income_data['yearly_income']:
+                amount = float(income_data['yearly_income'])
+                income.monthly_income = amount / 12
+            else:
+                monthly_income = float(income_data.get('monthly_income', 0))
+                amount = monthly_income * 12
+                income.monthly_income = monthly_income
         elif income_type == IncomeType.HOURLY:
             hourly_wage = float(income_data.get('hourly_wage', 0))
             hours_worked = float(income_data.get('hours_worked', 0))
@@ -147,12 +184,13 @@ def update_portfolio():
 
     # Save to Firestore only for registered users
     if request.uid != "guest":
-        save_user_data(user, incomes, assets, debts, user_id=request.uid)
+        save_user_data(user, incomes, assets, debts, retirement_accounts, user_id=request.uid)
 
-    net_worth_data = calculate_net_worth(user, incomes, assets, debts)
+    net_worth_data = calculate_net_worth(user, incomes, assets, debts, retirement_accounts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
     net_worth_data['debts'] = [debt_to_dict(d) for d in debts]
+    net_worth_data['retirement_accounts'] = [retirement_account_to_dict(ra) for ra in retirement_accounts]
     return jsonify(net_worth_data)
 
 @app.route('/api/user_tax_info', methods=['PUT'])
@@ -160,9 +198,9 @@ def update_portfolio():
 def update_user_tax_info():
     data = request.get_json()
     if request.uid == "guest":
-        user, incomes, assets, debts = get_user_data(user_id="demo_user")
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id="demo_user")
     else:
-        user, incomes, assets, debts = get_user_data(user_id=request.uid)
+        user, incomes, assets, debts, retirement_accounts = get_user_data(user_id=request.uid)
     
     new_filing_status_str = data.get('filing_status')
     new_state_str = data.get('state')
@@ -181,12 +219,13 @@ def update_user_tax_info():
     
     # Save to Firestore only for registered users
     if request.uid != "guest":
-        save_user_data(user, incomes, assets, debts, user_id=request.uid)
+        save_user_data(user, incomes, assets, debts, retirement_accounts, user_id=request.uid)
 
-    net_worth_data = calculate_net_worth(user, incomes, assets, debts)
+    net_worth_data = calculate_net_worth(user, incomes, assets, debts, retirement_accounts)
     net_worth_data['assets'] = [asset_to_dict(a) for a in assets]
     net_worth_data['incomes'] = [income_to_dict(i) for i in incomes]
     net_worth_data['debts'] = [debt_to_dict(d) for d in debts]
+    net_worth_data['retirement_accounts'] = [retirement_account_to_dict(ra) for ra in retirement_accounts]
     net_worth_data['filing_status'] = user.filing_status.name
     net_worth_data['state'] = user.state.name
     return jsonify(net_worth_data)

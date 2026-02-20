@@ -50,6 +50,7 @@ function MainContent({ isGuest, onResetGuest }) {
   const [assets, setAssets] = useState([]);
   const [incomes, setIncomes] = useState([]);
   const [debts, setDebts] = useState([]);
+  const [retirementAccounts, setRetirementAccounts] = useState([]);
   const [taxLiability, setTaxLiability] = useState({ 
     total: 0, 
     federal: 0, 
@@ -78,6 +79,7 @@ function MainContent({ isGuest, onResetGuest }) {
         setAssets(response.data.assets);
         setIncomes(response.data.incomes);
         setDebts(response.data.debts);
+        setRetirementAccounts(response.data.retirement_accounts || []);
         setNetWorth(response.data.real_time_net_worth);
         setTaxLiability({
             total: response.data.estimated_tax_liability,
@@ -114,6 +116,7 @@ function MainContent({ isGuest, onResetGuest }) {
         setAssets(response.data.assets);
         setIncomes(response.data.incomes);
         setDebts(response.data.debts);
+        setRetirementAccounts(response.data.retirement_accounts || []);
         setNetWorth(response.data.real_time_net_worth);
         setTaxLiability({
           total: response.data.estimated_tax_liability,
@@ -182,12 +185,17 @@ function MainContent({ isGuest, onResetGuest }) {
       case 'dashboard':
         return <Dashboard netWorth={netWorth} assets={assets} debts={debts} taxLiability={taxLiability} />;
       case 'income':
+        const totalAnnualIncomeForOverview = incomes.reduce((acc, inc) => acc + inc.amount, 0);
+        const totalMonthlyIncomeForOverview = totalAnnualIncomeForOverview / 12;
         return (
           <div className="space-y-6">
             <h2 className="text-3xl font-bold text-gray-800">Income Overview</h2>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                <div className="flex justify-between items-center mb-6">
-                  <p className="text-gray-600">Total Annual Gross Income: <span className="font-bold text-green-600">${incomes.reduce((acc, inc) => acc + inc.amount, 0).toLocaleString()}</span></p>
+                  <div>
+                    <p className="text-gray-600">Total Annual Gross Income: <span className="font-bold text-green-600">${totalAnnualIncomeForOverview.toLocaleString()}</span></p>
+                    <p className="text-gray-600">Total Monthly Gross Income: <span className="font-bold text-green-600">${totalMonthlyIncomeForOverview.toLocaleString()}</span></p>
+                  </div>
                   <button onClick={() => openEditModal('income')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Update Income</button>
                </div>
             </div>
@@ -273,7 +281,7 @@ function MainContent({ isGuest, onResetGuest }) {
     <Layout activeView={activeView} setActiveView={setActiveView}>
       {renderContent()}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Edit Portfolio">
-        <EditPortfolio onSave={handleSave} assets={assets} incomes={incomes} debts={debts} initialTab={modalTab} /> 
+        <EditPortfolio onSave={handleSave} assets={assets} incomes={incomes} debts={debts} retirementAccounts={retirementAccounts} initialTab={modalTab} /> 
       </Modal>
     </Layout>
   );

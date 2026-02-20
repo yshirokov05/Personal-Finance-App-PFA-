@@ -74,6 +74,12 @@ class IncomeType(enum.Enum):
     HOURLY = "hourly"
     SALARY = "salary"
 
+class AccountType(enum.Enum):
+    ROTH_IRA = "roth_ira"
+    TRADITIONAL_IRA = "traditional_ira"
+    K401 = "401k"
+    B403 = "403b"
+
 class AssetType(enum.Enum):
     STOCK = "stock"
     BOND = "bond"
@@ -92,11 +98,22 @@ class Income(Base):
     monthly_income = Column(Float, nullable=True)
     hourly_wage = Column(Float, nullable=True)
     hours_worked = Column(Float, nullable=True)
+    year = Column(Integer, nullable=False, default=2026)
+
+class RetirementAccount(Base):
+    __tablename__ = 'retirement_accounts'
+    id = Column(Integer, primary_key=True) # Used for linking assets in valid SQL, effectively UUID in Firestore
+    user_id = Column(Integer, nullable=True)
+    name = Column(String, nullable=False)
+    account_type = Column(Enum(AccountType), nullable=False)
+    contributions_2025 = Column(Float, nullable=False, default=0.0)
+    contributions_2026 = Column(Float, nullable=False, default=0.0)
 
 class Asset(Base):
     __tablename__ = 'assets'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=True)
+    retirement_account_id = Column(String, nullable=True) # ID string to link to Firestore retirement account
     ticker = Column(String, nullable=False)
     shares = Column(Float, nullable=False)
     cost_basis = Column(Float, nullable=False)
